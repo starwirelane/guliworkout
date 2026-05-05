@@ -37,3 +37,5 @@ Go to Vercel → your project → Settings → Environment Variables and add:
 
 ### 4. Deploy
 Push to GitHub → Vercel auto-deploys. Done.
+
+Vercel rebuild
