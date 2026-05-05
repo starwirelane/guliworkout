@@ -14,7 +14,113 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      completions: {
+        Row: {
+          completed: boolean
+          created_at: string
+          day_index: number
+          edited_name: string | null
+          exercise_index: number
+          id: string
+          photo_url: string | null
+          plan_id: string
+          user_id: string
+        }
+        Insert: {
+          completed?: boolean
+          created_at?: string
+          day_index: number
+          edited_name?: string | null
+          exercise_index: number
+          id?: string
+          photo_url?: string | null
+          plan_id: string
+          user_id: string
+        }
+        Update: {
+          completed?: boolean
+          created_at?: string
+          day_index?: number
+          edited_name?: string | null
+          exercise_index?: number
+          id?: string
+          photo_url?: string | null
+          plan_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "completions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plans: {
+        Row: {
+          created_at: string
+          days: Json
+          goal: string
+          id: string
+          start_date: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          days: Json
+          goal: string
+          id?: string
+          start_date?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          days?: Json
+          goal?: string
+          id?: string
+          start_date?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          age: number | null
+          created_at: string
+          equipment: string | null
+          fitness_level: string | null
+          goal: string
+          height_cm: number | null
+          id: string
+          name: string
+          weight_kg: number | null
+        }
+        Insert: {
+          age?: number | null
+          created_at?: string
+          equipment?: string | null
+          fitness_level?: string | null
+          goal: string
+          height_cm?: number | null
+          id: string
+          name: string
+          weight_kg?: number | null
+        }
+        Update: {
+          age?: number | null
+          created_at?: string
+          equipment?: string | null
+          fitness_level?: string | null
+          goal?: string
+          height_cm?: number | null
+          id?: string
+          name?: string
+          weight_kg?: number | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
