@@ -30,14 +30,18 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
+      { title: "GULIWORKOUT" },
+      { name: "description", content: "Your Daily Fit is a free, ad-free fitness website that generates personalized 14-day workout plans." },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { property: "og:title", content: "GULIWORKOUT" },
+      { property: "og:description", content: "Your Daily Fit is a free, ad-free fitness website that generates personalized 14-day workout plans." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "GULIWORKOUT" },
+      { name: "twitter:description", content: "Your Daily Fit is a free, ad-free fitness website that generates personalized 14-day workout plans." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/0734d0cd-fe97-4ad4-a462-f8d3b48e67d9/id-preview-9ba2ddcd--46cb75f1-a0c1-48c2-927f-53a9778a884b.lovable.app-1778017370036.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/0734d0cd-fe97-4ad4-a462-f8d3b48e67d9/id-preview-9ba2ddcd--46cb75f1-a0c1-48c2-927f-53a9778a884b.lovable.app-1778017370036.png" },
     ],
     links: [
       {
