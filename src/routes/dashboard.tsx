@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { pickExerciseImage } from "@/lib/exercise-images";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({ meta: [{ title: "Today — Twoweek" }] }),
@@ -19,6 +20,7 @@ function Dashboard() {
   const [days, setDays] = useState<Day[] | null>(null);
   const [startDate, setStartDate] = useState<string>("");
   const [completed, setCompleted] = useState<Record<string, boolean>>({});
+  const [activeIdx, setActiveIdx] = useState(0);
   const [regenerating, setRegenerating] = useState(false);
 
   const load = useCallback(async () => {
@@ -52,6 +54,15 @@ function Dashboard() {
     return Math.max(0, Math.min(13, diff));
   })();
 
+  // When day data loads, set active to first incomplete exercise.
+  useEffect(() => {
+    if (!days) return;
+    const today = days[todayIndex];
+    const firstIncomplete = today.exercises.findIndex((_, i) => !completed[`${todayIndex}-${i}`]);
+    setActiveIdx(firstIncomplete === -1 ? 0 : firstIncomplete);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [days, todayIndex]);
+
   async function regenerate() {
     setRegenerating(true);
     try {
@@ -67,16 +78,16 @@ function Dashboard() {
     }
   }
 
-  async function toggle(dayIdx: number, exIdx: number) {
+  async function toggle(exIdx: number) {
     if (!planId) return;
-    const key = `${dayIdx}-${exIdx}`;
+    const key = `${todayIndex}-${exIdx}`;
     const next = !completed[key];
     setCompleted({ ...completed, [key]: next });
     const userRes = await supabase.auth.getUser();
     const userId = userRes.data.user?.id;
     if (!userId) return;
     await supabase.from("completions").upsert({
-      user_id: userId, plan_id: planId, day_index: dayIdx, exercise_index: exIdx, completed: next,
+      user_id: userId, plan_id: planId, day_index: todayIndex, exercise_index: exIdx, completed: next,
     }, { onConflict: "plan_id,day_index,exercise_index" });
   }
 
@@ -92,58 +103,150 @@ function Dashboard() {
   const today = days[todayIndex];
   const totalToday = today.exercises.length;
   const doneToday = today.exercises.filter((_, i) => completed[`${todayIndex}-${i}`]).length;
+  const allDone = doneToday === totalToday;
+  const activeEx = today.exercises[activeIdx];
+  const activeImg = pickExerciseImage(activeEx.name);
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-background paper">
-      <div className="blob top-[-100px] right-[-100px] h-[400px] w-[400px] bg-primary/30" />
-      <div className="blob bottom-[10%] left-[-100px] h-[400px] w-[400px] bg-accent/40" />
+      <div className="blob top-[-150px] right-[-100px] h-[500px] w-[500px] bg-primary/25" />
+      <div className="blob bottom-[-100px] left-[-100px] h-[450px] w-[450px] bg-accent/35" />
 
-      <header className="relative z-10 mx-auto flex max-w-4xl items-center justify-between px-6 py-6">
+      <header className="relative z-20 mx-auto flex max-w-7xl items-center justify-between px-6 py-6">
         <Link to="/" className="serif text-2xl font-bold">Two<span className="italic-accent">week</span></Link>
-        <div className="flex items-center gap-2">
-          <Link to="/plan" className="rounded-full px-4 py-2 text-sm font-semibold hover:bg-foreground/5">Full plan</Link>
-          <button onClick={signOut} className="rounded-full px-4 py-2 text-sm font-semibold hover:bg-foreground/5">Sign out</button>
+        <div className="flex items-center gap-1 text-sm">
+          <Link to="/plan" className="rounded-full px-4 py-2 font-semibold hover:bg-foreground/5">Full plan</Link>
+          <button onClick={signOut} className="rounded-full px-4 py-2 font-semibold hover:bg-foreground/5">Sign out</button>
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto max-w-2xl px-6 py-8">
-        <p className="text-sm font-semibold uppercase tracking-widest text-primary">
-          Day {todayIndex + 1} of 14
-        </p>
-        <h1 className="mt-2 serif text-5xl font-bold leading-[1.05] md:text-6xl">
-          Hi {name}, <span className="italic-accent italic">{today.title.toLowerCase()}</span>.
-        </h1>
-        <p className="mt-4 text-lg text-foreground/70">{today.motivation}</p>
-
-        <div className="mt-8 flex items-center gap-3 text-sm font-semibold text-foreground/60">
-          <div className="flex-1 overflow-hidden rounded-full bg-foreground/10">
-            <div className="h-2 rounded-full bg-primary transition-all" style={{ width: `${totalToday ? (doneToday / totalToday) * 100 : 0}%` }} />
-          </div>
-          <span>{doneToday}/{totalToday}</span>
+      <main className="relative z-10 mx-auto max-w-7xl px-6 pb-20">
+        {/* Heading */}
+        <div className="mb-10 max-w-3xl">
+          <p className="text-sm font-semibold uppercase tracking-widest text-primary">
+            Day {todayIndex + 1} of 14 · <span className="capitalize">{today.focus}</span>
+          </p>
+          <h1 className="mt-2 serif text-4xl font-bold leading-[1.05] md:text-6xl">
+            Hi {name}, <span className="italic-accent italic">{today.title.toLowerCase()}</span>.
+          </h1>
+          <p className="mt-3 text-lg text-foreground/65 italic">"{today.motivation}"</p>
         </div>
 
-        <ul className="mt-8 space-y-3">
-          {today.exercises.map((ex, i) => {
-            const done = completed[`${todayIndex}-${i}`];
-            return (
-              <li key={i}>
-                <button onClick={() => toggle(todayIndex, i)}
-                  className={`flex w-full items-start gap-4 rounded-2xl border-2 p-5 text-left transition ${done ? "border-primary/40 bg-primary/5" : "border-foreground/10 bg-card hover:border-foreground/30"}`}>
-                  <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition ${done ? "border-primary bg-primary text-primary-foreground" : "border-foreground/30"}`}>
-                    {done && "✓"}
-                  </div>
-                  <div className="flex-1">
-                    <div className={`serif text-xl font-bold ${done ? "text-foreground/50 line-through" : ""}`}>{ex.name}</div>
-                    <div className="mt-1 text-sm font-semibold text-primary">{ex.sets > 1 ? `${ex.sets} × ` : ""}{ex.reps}</div>
-                    <div className="mt-1 text-sm text-foreground/60">{ex.cue}</div>
-                  </div>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        {/* Two-pane layout */}
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+          {/* LEFT: checklist */}
+          <section className="rounded-3xl border-2 border-foreground/10 bg-card p-6 md:p-8">
+            <div className="mb-6 flex items-center justify-between">
+              <h2 className="serif text-2xl font-bold">Your checklist</h2>
+              <span className="text-sm font-semibold text-foreground/50">{doneToday}/{totalToday}</span>
+            </div>
+            <div className="mb-6 h-2 overflow-hidden rounded-full bg-foreground/10">
+              <div className="h-full rounded-full bg-primary transition-all duration-500" style={{ width: `${totalToday ? (doneToday / totalToday) * 100 : 0}%` }} />
+            </div>
 
-        {todayIndex >= 13 && (
+            <ul className="space-y-2">
+              {today.exercises.map((ex, i) => {
+                const done = completed[`${todayIndex}-${i}`];
+                const active = i === activeIdx;
+                return (
+                  <li key={i}>
+                    <div className={`group flex items-start gap-3 rounded-2xl border-2 p-4 transition ${
+                      active ? "border-primary bg-primary/5" :
+                      done ? "border-foreground/5 bg-transparent" :
+                      "border-foreground/10 bg-background/50 hover:border-foreground/25"
+                    }`}>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); toggle(i); }}
+                        aria-label={done ? "Mark incomplete" : "Mark complete"}
+                        className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition ${
+                          done ? "border-primary bg-primary text-primary-foreground" : "border-foreground/30 hover:border-primary"
+                        }`}
+                      >
+                        {done && <span className="text-sm">✓</span>}
+                      </button>
+                      <button onClick={() => setActiveIdx(i)} className="flex-1 text-left">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <div className={`serif text-lg font-bold transition ${done ? "text-foreground/40 line-through" : "text-foreground"}`}>
+                            {ex.name}
+                          </div>
+                          <div className="shrink-0 text-xs font-semibold text-primary">
+                            {ex.sets > 1 ? `${ex.sets} ×` : ""} {ex.reps}
+                          </div>
+                        </div>
+                        {active && !done && (
+                          <p className="mt-1 text-sm text-foreground/60">{ex.cue}</p>
+                        )}
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {allDone && (
+              <div className="mt-6 rounded-2xl bg-primary/10 p-5 text-center">
+                <p className="serif text-xl font-bold">Day complete. ✦</p>
+                <p className="mt-1 text-sm text-foreground/60">Come back tomorrow.</p>
+              </div>
+            )}
+          </section>
+
+          {/* RIGHT: illustration of active exercise */}
+          <section className="relative overflow-hidden rounded-3xl border-2 border-foreground/10 bg-gradient-to-br from-blush/40 via-card to-accent/30 p-6 md:p-10">
+            <div className="absolute inset-0 paper opacity-40" />
+            <div className="relative z-10 flex h-full flex-col">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-widest text-foreground/50">
+                  Exercise {activeIdx + 1} of {totalToday}
+                </span>
+                <span className="rounded-full bg-foreground px-3 py-1 text-xs font-bold uppercase tracking-wider text-background">
+                  {activeEx.sets > 1 ? `${activeEx.sets} × ` : ""}{activeEx.reps}
+                </span>
+              </div>
+
+              <div className="my-4 flex flex-1 items-center justify-center">
+                <img
+                  key={activeEx.name + activeIdx}
+                  src={activeImg}
+                  alt={activeEx.name}
+                  className="floaty max-h-[400px] w-auto object-contain"
+                  width={768}
+                  height={768}
+                  loading="lazy"
+                />
+              </div>
+
+              <div>
+                <h3 className="serif text-3xl font-bold leading-tight md:text-4xl">
+                  {activeEx.name}
+                </h3>
+                <p className="mt-2 text-base text-foreground/70">{activeEx.cue}</p>
+                <div className="mt-5 flex flex-wrap gap-3">
+                  <button
+                    onClick={() => toggle(activeIdx)}
+                    className={`rounded-full px-6 py-3 text-sm font-semibold transition ${
+                      completed[`${todayIndex}-${activeIdx}`]
+                        ? "border-2 border-foreground/20 bg-transparent text-foreground hover:bg-foreground/5"
+                        : "bg-primary text-primary-foreground hover:scale-[1.02]"
+                    }`}
+                  >
+                    {completed[`${todayIndex}-${activeIdx}`] ? "↺ Mark undone" : "✓ Mark done"}
+                  </button>
+                  {activeIdx < totalToday - 1 && (
+                    <button
+                      onClick={() => setActiveIdx(activeIdx + 1)}
+                      className="rounded-full border-2 border-foreground/20 px-6 py-3 text-sm font-semibold hover:bg-foreground/5"
+                    >
+                      Next exercise →
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        {todayIndex >= 13 && allDone && (
           <div className="mt-10 rounded-3xl border-2 border-primary/30 bg-primary/10 p-8 text-center">
             <h3 className="serif text-3xl font-bold">Two weeks done. ✦</h3>
             <p className="mt-2 text-foreground/70">Time for a fresh chapter.</p>
