@@ -64,8 +64,8 @@ export default function Onboarding() {
     if (upErr) throw upErr;
 
     const { data, error } = await supabase.functions.invoke("generate-plan", {
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    });
+  body: { userId },
+});
 
     console.log("Function response:", data, error);
 
