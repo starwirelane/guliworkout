@@ -1,45 +1,42 @@
 import { useEffect, useState } from "react";
-
-function getSessions(d: Day): Session[] {
-  return d.sessions ?? [];
-}
+import { useNavigate, Link } from "react-router-dom";
+import { loadPlan, loadCompletions, type Day } from "@/lib/plan-generator";
 
 export default function PlanPage() {
   const navigate = useNavigate();
-  const [days, setDays] = useState<Day[] | null>(null);
-  const [completed, setCompleted] = useState<Record<string, boolean>>({});
   const [openDay, setOpenDay] = useState(0);
 
-  useEffect(() => {
-    const plan = getPlan();
-    if (!plan) {
-      navigate("/onboarding");
-      return;
-    }
-    setDays(plan.days);
-    setCompleted(getCompleted());
-  }, [navigate]);
+  const plan = loadPlan();
+  const completed = loadCompletions();
 
-  if (!days) return <div className="flex min-h-screen items-center justify-center"><div className="serif text-3xl">✦</div></div>;
+  useEffect(() => {
+    if (!plan) navigate("/onboarding");
+  }, [plan, navigate]);
+
+  if (!plan) return null;
+
+  const days: Day[] = plan.days;
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-background paper">
       <div className="blob top-[-100px] left-[-100px] h-[400px] w-[400px] bg-accent/40" />
       <header className="relative z-10 mx-auto flex max-w-4xl items-center justify-between px-6 py-6">
-        <Link to="/" className="serif text-2xl font-bold">Guli<span className="italic-accent">workout</span></Link>
+        <Link to="/" className="serif text-2xl font-bold">Two<span className="italic-accent">week</span></Link>
         <Link to="/dashboard" className="rounded-full bg-foreground px-5 py-2 text-sm font-semibold text-background">Today →</Link>
       </header>
 
       <main className="relative z-10 mx-auto max-w-3xl px-6 py-8">
-        <p className="text-sm font-semibold uppercase tracking-widest text-primary">Your plan</p>
+        <p className="text-sm font-semibold uppercase tracking-widest text-primary">Your story</p>
         <h1 className="mt-2 serif text-5xl font-bold md:text-6xl">14 days, <span className="italic-accent italic">all yours</span>.</h1>
 
         <div className="mt-10 space-y-3">
           {days.map((d, i) => {
-            const sessions = getSessions(d);
-            const allEx = sessions.flatMap((s, si) => s.exercises.map((_, ei) => packIdx(si, ei)));
-            const total = allEx.length;
-            const done = allEx.filter((p) => completed[`${i}-${p}`]).length;
+            const allExercises = d.sessions?.flatMap(s => s.exercises) ?? d.exercises ?? [];
+            const total = allExercises.length;
+            const done = d.sessions
+              ? d.sessions.reduce((sum, s, si) =>
+                  sum + s.exercises.filter((_, ei) => completed[`${i}-${si}-${ei}`]).length, 0)
+              : allExercises.filter((_, j) => completed[`${i}-0-${j}`]).length;
             const isDone = done === total && total > 0;
             const open = openDay === i;
 
@@ -56,15 +53,15 @@ export default function PlanPage() {
                   <div className="text-foreground/40">{open ? "−" : "+"}</div>
                 </button>
 
-                {open && (
-                  <div className="space-y-4 border-t border-foreground/10 px-5 py-4">
+                {open && d.sessions && (
+                  <div className="border-t border-foreground/10 px-5 py-4 space-y-4">
                     <p className="italic text-foreground/70">{d.motivation}</p>
-                    {sessions.map((s, si) => (
+                    {d.sessions.map((s, si) => (
                       <div key={si}>
-                        <div className="mb-2 text-[10px] font-bold uppercase tracking-widest text-primary">
-                          {s.kind === "main" ? "★ Main · " : "✦ Movement · "}{s.suggested_time}
+                        <div className="mb-2 flex items-center gap-2">
+                          <span className="text-sm font-bold text-foreground/80">{s.kind === "main" ? "🔥" : "🌿"} {s.title}</span>
+                          <span className="text-xs text-foreground/50">· {s.suggested_time}</span>
                         </div>
-                        <div className="mb-2 serif text-base font-bold">{s.title}</div>
                         <ul className="space-y-2">
                           {s.exercises.map((ex, j) => (
                             <li key={j} className="flex justify-between gap-4 rounded-xl bg-background px-4 py-3">
