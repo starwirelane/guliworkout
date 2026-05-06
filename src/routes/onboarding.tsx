@@ -38,32 +38,47 @@ export default function Onboarding() {
     });
   }, [navigate]);
 
-  async function finish() {
-    if (!userId) return;
-    setGenerating(true);
-    try {
-      const { error: upErr } = await supabase.from("profiles").update({
-        name: form.name || "Friend",
-        age: form.age ? Number(form.age) : null,
-        weight_kg: form.weight_kg ? Number(form.weight_kg) : null,
-        height_cm: form.height_cm ? Number(form.height_cm) : null,
-        fitness_level: form.fitness_level,
-        equipment: form.equipment,
-        goal: form.goal,
-        workout_time: form.workout_time,
-      }).eq("id", userId);
-      if (upErr) throw upErr;
-      const { data: { session } } = await supabase.auth.getSession(); const { data, error } = await supabase.functions.invoke("generate-plan", {   headers: { Authorization: `Bearer ${session?.access_token}` }, });
-      if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
-      toast.success("Your plan is ready!");
-      navigate("/dashboard");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not create plan");
+ async function finish() {
+  if (!userId) return;
+  setGenerating(true);
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const session = sessionData.session;
+    
+    if (!session) {
+      toast.error("Not logged in — please go back to auth");
       setGenerating(false);
+      return;
     }
-  }
 
+    const { error: upErr } = await supabase.from("profiles").update({
+      name: form.name || "Friend",
+      age: form.age ? Number(form.age) : null,
+      weight_kg: form.weight_kg ? Number(form.weight_kg) : null,
+      height_cm: form.height_cm ? Number(form.height_cm) : null,
+      fitness_level: form.fitness_level,
+      equipment: form.equipment,
+      goal: form.goal,
+      workout_time: form.workout_time,
+    }).eq("id", userId);
+    if (upErr) throw upErr;
+
+    const { data, error } = await supabase.functions.invoke("generate-plan", {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+
+    console.log("Function response:", data, error);
+
+    if (error) throw error;
+    if ((data as any)?.error) throw new Error((data as any).error);
+    toast.success("Your plan is ready!");
+    navigate("/dashboard");
+  } catch (e) {
+    console.error("Plan error:", e);
+    toast.error(e instanceof Error ? e.message : "Could not create plan");
+    setGenerating(false);
+  }
+}
   const steps = [
     {
       title: "What should we call you?",
