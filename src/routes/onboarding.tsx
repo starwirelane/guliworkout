@@ -53,7 +53,7 @@ export default function Onboarding() {
         workout_time: form.workout_time,
       }).eq("id", userId);
       if (upErr) throw upErr;
-      const { data, error } = await supabase.functions.invoke("generate-plan");
+      const { data: { session } } = await supabase.auth.getSession(); const { data, error } = await supabase.functions.invoke("generate-plan", {   headers: { Authorization: `Bearer ${session?.access_token}` }, });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
       toast.success("Your plan is ready!");
