@@ -1,11 +1,26 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { pickExerciseImage } from "@/lib/exercise-images";
 
 type Exercise = { name: string; sets: number; reps: string; cue: string };
-type Day = { title: string; focus: string; motivation: string; exercises: Exercise[] };
+type Session = { kind: "main" | "movement"; title: string; suggested_time: string; exercises: Exercise[] };
+type Day = { title: string; focus: string; motivation: string; sessions?: Session[]; exercises?: Exercise[] };
+
+// Pack (sessionIdx, exerciseIdx) into a single int for the completions table
+const packIdx = (s: number, e: number) => s * 100 + e;
+
+function normalizeDay(d: Day): Session[] {
+  if (d.sessions && d.sessions.length) return d.sessions;
+  // Legacy plans: wrap as one main session
+  return [{
+    kind: "main",
+    title: "Main workout",
+    suggested_time: "Anytime — pick when it fits",
+    exercises: d.exercises ?? [],
+  }];
+}
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -15,6 +30,7 @@ export default function Dashboard() {
   const [days, setDays] = useState<Day[] | null>(null);
   const [startDate, setStartDate] = useState<string>("");
   const [completed, setCompleted] = useState<Record<string, boolean>>({});
+  const [activeSession, setActiveSession] = useState(0);
   const [activeIdx, setActiveIdx] = useState(0);
   const [regenerating, setRegenerating] = useState(false);
 
@@ -41,21 +57,24 @@ export default function Dashboard() {
 
   useEffect(() => { load(); }, [load]);
 
-  const todayIndex = (() => {
+  const todayIndex = useMemo(() => {
     if (!startDate) return 0;
     const start = new Date(startDate + "T00:00:00");
     const now = new Date();
     const diff = Math.floor((now.getTime() - start.getTime()) / 86400000);
     return Math.max(0, Math.min(13, diff));
-  })();
+  }, [startDate]);
+
+  const todaySessions = useMemo(() => days ? normalizeDay(days[todayIndex]) : [], [days, todayIndex]);
 
   useEffect(() => {
-    if (!days) return;
-    const today = days[todayIndex];
-    const firstIncomplete = today.exercises.findIndex((_, i) => !completed[`${todayIndex}-${i}`]);
+    if (!todaySessions.length) return;
+    const session = todaySessions[activeSession];
+    if (!session) return;
+    const firstIncomplete = session.exercises.findIndex((_, i) => !completed[`${todayIndex}-${packIdx(activeSession, i)}`]);
     setActiveIdx(firstIncomplete === -1 ? 0 : firstIncomplete);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [days, todayIndex]);
+  }, [todaySessions, activeSession, todayIndex]);
 
   async function regenerate() {
     setRegenerating(true);
@@ -72,16 +91,17 @@ export default function Dashboard() {
     }
   }
 
-  async function toggle(exIdx: number) {
+  async function toggle(sIdx: number, exIdx: number) {
     if (!planId) return;
-    const key = `${todayIndex}-${exIdx}`;
+    const packed = packIdx(sIdx, exIdx);
+    const key = `${todayIndex}-${packed}`;
     const next = !completed[key];
     setCompleted({ ...completed, [key]: next });
     const userRes = await supabase.auth.getUser();
     const userId = userRes.data.user?.id;
     if (!userId) return;
     await supabase.from("completions").upsert({
-      user_id: userId, plan_id: planId, day_index: todayIndex, exercise_index: exIdx, completed: next,
+      user_id: userId, plan_id: planId, day_index: todayIndex, exercise_index: packed, completed: next,
     }, { onConflict: "plan_id,day_index,exercise_index" });
   }
 
@@ -95,11 +115,18 @@ export default function Dashboard() {
   }
 
   const today = days[todayIndex];
-  const totalToday = today.exercises.length;
-  const doneToday = today.exercises.filter((_, i) => completed[`${todayIndex}-${i}`]).length;
-  const allDone = doneToday === totalToday;
-  const activeEx = today.exercises[activeIdx];
-  const activeImg = pickExerciseImage(activeEx.name);
+  const session = todaySessions[activeSession];
+  const totalSession = session.exercises.length;
+  const doneSession = session.exercises.filter((_, i) => completed[`${todayIndex}-${packIdx(activeSession, i)}`]).length;
+
+  // Whole day progress across all 3 sessions
+  const allEx = todaySessions.flatMap((s, si) => s.exercises.map((_, ei) => `${todayIndex}-${packIdx(si, ei)}`));
+  const dayDone = allEx.filter((k) => completed[k]).length;
+  const dayTotal = allEx.length;
+  const allDone = dayDone === dayTotal;
+
+  const activeEx = session.exercises[activeIdx];
+  const activeImg = activeEx ? pickExerciseImage(activeEx.name) : "";
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-background paper">
@@ -113,33 +140,65 @@ export default function Dashboard() {
         </div>
       </header>
       <main className="relative z-10 mx-auto max-w-7xl px-6 pb-20">
-        <div className="mb-10 max-w-3xl">
+        <div className="mb-8 max-w-3xl">
           <p className="text-sm font-semibold uppercase tracking-widest text-primary">
-            Day {todayIndex + 1} of 14 · <span className="capitalize">{today.focus}</span>
+            Day {todayIndex + 1} of 14 · <span className="capitalize">{today.focus}</span> · {dayDone}/{dayTotal} done today
           </p>
           <h1 className="mt-2 serif text-4xl font-bold leading-[1.05] md:text-6xl">
             Hi {name}, <span className="italic-accent italic">{today.title.toLowerCase()}</span>.
           </h1>
           <p className="mt-3 text-lg text-foreground/65 italic">"{today.motivation}"</p>
         </div>
+
+        {/* Session tabs — 3 per day */}
+        <div className="mb-6 grid gap-3 sm:grid-cols-3">
+          {todaySessions.map((s, i) => {
+            const total = s.exercises.length;
+            const done = s.exercises.filter((_, ei) => completed[`${todayIndex}-${packIdx(i, ei)}`]).length;
+            const active = i === activeSession;
+            const complete = done === total && total > 0;
+            return (
+              <button
+                key={i}
+                onClick={() => setActiveSession(i)}
+                className={`rounded-2xl border-2 p-4 text-left transition ${
+                  active ? "border-primary bg-primary/10" : "border-foreground/10 bg-card hover:border-foreground/30"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-primary">
+                    {s.kind === "main" ? "★ Main workout" : "✦ Movement break"}
+                  </span>
+                  {complete && <span className="text-xs">✓</span>}
+                </div>
+                <div className="mt-1 serif text-lg font-bold leading-tight">{s.title}</div>
+                <div className="mt-1 text-xs text-foreground/60">{s.suggested_time} · {done}/{total}</div>
+              </button>
+            );
+          })}
+        </div>
+
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-          {/* LEFT: checklist */}
+          {/* LEFT: checklist for active session */}
           <section className="rounded-3xl border-2 border-foreground/10 bg-card p-6 md:p-8">
+            <div className="mb-2 text-[10px] font-bold uppercase tracking-widest text-primary">
+              {session.kind === "main" ? "Main workout" : "Movement break"} · {session.suggested_time}
+            </div>
             <div className="mb-6 flex items-center justify-between">
-              <h2 className="serif text-2xl font-bold">Your checklist</h2>
-              <span className="text-sm font-semibold text-foreground/50">{doneToday}/{totalToday}</span>
+              <h2 className="serif text-2xl font-bold">{session.title}</h2>
+              <span className="text-sm font-semibold text-foreground/50">{doneSession}/{totalSession}</span>
             </div>
             <div className="mb-6 h-2 overflow-hidden rounded-full bg-foreground/10">
-              <div className="h-full rounded-full bg-primary transition-all duration-500" style={{ width: `${totalToday ? (doneToday / totalToday) * 100 : 0}%` }} />
+              <div className="h-full rounded-full bg-primary transition-all duration-500" style={{ width: `${totalSession ? (doneSession / totalSession) * 100 : 0}%` }} />
             </div>
             <ul className="space-y-2">
-              {today.exercises.map((ex, i) => {
-                const done = completed[`${todayIndex}-${i}`];
+              {session.exercises.map((ex, i) => {
+                const done = completed[`${todayIndex}-${packIdx(activeSession, i)}`];
                 const active = i === activeIdx;
                 return (
                   <li key={i}>
                     <div className={`group flex items-start gap-3 rounded-2xl border-2 p-4 transition ${active ? "border-primary bg-primary/5" : done ? "border-foreground/5 bg-transparent" : "border-foreground/10 bg-background/50 hover:border-foreground/25"}`}>
-                      <button onClick={(e) => { e.stopPropagation(); toggle(i); }}
+                      <button onClick={(e) => { e.stopPropagation(); toggle(activeSession, i); }}
                         aria-label={done ? "Mark incomplete" : "Mark complete"}
                         className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition ${done ? "border-primary bg-primary text-primary-foreground" : "border-foreground/30 hover:border-primary"}`}>
                         {done && <span className="text-sm">✓</span>}
@@ -163,39 +222,47 @@ export default function Dashboard() {
               </div>
             )}
           </section>
-          {/* RIGHT: active exercise */}
+
+          {/* RIGHT: active exercise visual */}
           <section className="relative overflow-hidden rounded-3xl border-2 border-foreground/10 bg-gradient-to-br from-blush/40 via-card to-accent/30 p-6 md:p-10">
             <div className="absolute inset-0 paper opacity-40" />
             <div className="relative z-10 flex h-full flex-col">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-widest text-foreground/50">Exercise {activeIdx + 1} of {totalToday}</span>
-                <span className="rounded-full bg-foreground px-3 py-1 text-xs font-bold uppercase tracking-wider text-background">
-                  {activeEx.sets > 1 ? `${activeEx.sets} × ` : ""}{activeEx.reps}
-                </span>
+                <span className="text-xs font-semibold uppercase tracking-widest text-foreground/50">Exercise {activeIdx + 1} of {totalSession}</span>
+                {activeEx && (
+                  <span className="rounded-full bg-foreground px-3 py-1 text-xs font-bold uppercase tracking-wider text-background">
+                    {activeEx.sets > 1 ? `${activeEx.sets} × ` : ""}{activeEx.reps}
+                  </span>
+                )}
               </div>
-              <div className="my-4 flex flex-1 items-center justify-center">
-                <img key={activeEx.name + activeIdx} src={activeImg} alt={activeEx.name}
-                  className="floaty max-h-[400px] w-auto object-contain" width={768} height={768} loading="lazy" />
-              </div>
-              <div>
-                <h3 className="serif text-3xl font-bold leading-tight md:text-4xl">{activeEx.name}</h3>
-                <p className="mt-2 text-base text-foreground/70">{activeEx.cue}</p>
-                <div className="mt-5 flex flex-wrap gap-3">
-                  <button onClick={() => toggle(activeIdx)}
-                    className={`rounded-full px-6 py-3 text-sm font-semibold transition ${completed[`${todayIndex}-${activeIdx}`] ? "border-2 border-foreground/20 bg-transparent text-foreground hover:bg-foreground/5" : "bg-primary text-primary-foreground hover:scale-[1.02]"}`}>
-                    {completed[`${todayIndex}-${activeIdx}`] ? "↺ Mark undone" : "✓ Mark done"}
-                  </button>
-                  {activeIdx < totalToday - 1 && (
-                    <button onClick={() => setActiveIdx(activeIdx + 1)}
-                      className="rounded-full border-2 border-foreground/20 px-6 py-3 text-sm font-semibold hover:bg-foreground/5">
-                      Next exercise →
-                    </button>
-                  )}
-                </div>
-              </div>
+              {activeEx && (
+                <>
+                  <div className="my-4 flex flex-1 items-center justify-center">
+                    <img key={activeEx.name + activeIdx + activeSession} src={activeImg} alt={activeEx.name}
+                      className="floaty max-h-[400px] w-auto object-contain" width={768} height={768} loading="lazy" />
+                  </div>
+                  <div>
+                    <h3 className="serif text-3xl font-bold leading-tight md:text-4xl">{activeEx.name}</h3>
+                    <p className="mt-2 text-base text-foreground/70">{activeEx.cue}</p>
+                    <div className="mt-5 flex flex-wrap gap-3">
+                      <button onClick={() => toggle(activeSession, activeIdx)}
+                        className={`rounded-full px-6 py-3 text-sm font-semibold transition ${completed[`${todayIndex}-${packIdx(activeSession, activeIdx)}`] ? "border-2 border-foreground/20 bg-transparent text-foreground hover:bg-foreground/5" : "bg-primary text-primary-foreground hover:scale-[1.02]"}`}>
+                        {completed[`${todayIndex}-${packIdx(activeSession, activeIdx)}`] ? "↺ Mark undone" : "✓ Mark done"}
+                      </button>
+                      {activeIdx < totalSession - 1 && (
+                        <button onClick={() => setActiveIdx(activeIdx + 1)}
+                          className="rounded-full border-2 border-foreground/20 px-6 py-3 text-sm font-semibold hover:bg-foreground/5">
+                          Next exercise →
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </section>
         </div>
+
         {todayIndex >= 13 && allDone && (
           <div className="mt-10 rounded-3xl border-2 border-primary/30 bg-primary/10 p-8 text-center">
             <h3 className="serif text-3xl font-bold">Two weeks done. ✦</h3>

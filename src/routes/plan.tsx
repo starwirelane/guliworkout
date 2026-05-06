@@ -3,7 +3,14 @@ import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 
 type Exercise = { name: string; sets: number; reps: string; cue: string };
-type Day = { title: string; focus: string; motivation: string; exercises: Exercise[] };
+type Session = { kind: "main" | "movement"; title: string; suggested_time: string; exercises: Exercise[] };
+type Day = { title: string; focus: string; motivation: string; sessions?: Session[]; exercises?: Exercise[] };
+
+const packIdx = (s: number, e: number) => s * 100 + e;
+function getSessions(d: Day): Session[] {
+  if (d.sessions?.length) return d.sessions;
+  return [{ kind: "main", title: "Main workout", suggested_time: "Anytime", exercises: d.exercises ?? [] }];
+}
 
 export default function PlanPage() {
   const navigate = useNavigate();
@@ -41,8 +48,10 @@ export default function PlanPage() {
 
         <div className="mt-10 space-y-3">
           {days.map((d, i) => {
-            const total = d.exercises.length;
-            const done = d.exercises.filter((_, j) => completed[`${i}-${j}`]).length;
+            const sessions = getSessions(d);
+            const allEx = sessions.flatMap((s, si) => s.exercises.map((_, ei) => packIdx(si, ei)));
+            const total = allEx.length;
+            const done = allEx.filter((p) => completed[`${i}-${p}`]).length;
             const isDone = done === total && total > 0;
             const open = openDay === i;
             return (
@@ -58,21 +67,29 @@ export default function PlanPage() {
                   <div className="text-foreground/40">{open ? "−" : "+"}</div>
                 </button>
                 {open && (
-                  <div className="border-t border-foreground/10 px-5 py-4">
-                    <p className="mb-4 italic text-foreground/70">{d.motivation}</p>
-                    <ul className="space-y-2">
-                      {d.exercises.map((ex, j) => (
-                        <li key={j} className="flex justify-between gap-4 rounded-xl bg-background px-4 py-3">
-                          <div>
-                            <div className="font-semibold">{ex.name}</div>
-                            <div className="text-sm text-foreground/60">{ex.cue}</div>
-                          </div>
-                          <div className="shrink-0 text-sm font-semibold text-primary">
-                            {ex.sets > 1 ? `${ex.sets}×` : ""} {ex.reps}
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
+                  <div className="space-y-4 border-t border-foreground/10 px-5 py-4">
+                    <p className="italic text-foreground/70">{d.motivation}</p>
+                    {sessions.map((s, si) => (
+                      <div key={si}>
+                        <div className="mb-2 text-[10px] font-bold uppercase tracking-widest text-primary">
+                          {s.kind === "main" ? "★ Main · " : "✦ Movement · "}{s.suggested_time}
+                        </div>
+                        <div className="mb-2 serif text-base font-bold">{s.title}</div>
+                        <ul className="space-y-2">
+                          {s.exercises.map((ex, j) => (
+                            <li key={j} className="flex justify-between gap-4 rounded-xl bg-background px-4 py-3">
+                              <div>
+                                <div className="font-semibold">{ex.name}</div>
+                                <div className="text-sm text-foreground/60">{ex.cue}</div>
+                              </div>
+                              <div className="shrink-0 text-sm font-semibold text-primary">
+                                {ex.sets > 1 ? `${ex.sets}×` : ""} {ex.reps}
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
