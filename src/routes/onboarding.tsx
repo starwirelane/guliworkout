@@ -30,29 +30,34 @@ export default function Onboarding() {
   });
   const [generating, setGenerating] = useState(false);
 
-  function finish() {
-    setGenerating(true);
-    try {
-      const profile: Profile = {
-        name: form.name || "Friend",
-        age: form.age ? Number(form.age) : undefined,
-        weight_kg: form.weight_kg ? Number(form.weight_kg) : undefined,
-        height_cm: form.height_cm ? Number(form.height_cm) : undefined,
-        fitness_level: form.fitness_level,
-        equipment: form.equipment,
-        goal: form.goal,
-        workout_time: form.workout_time,
-      };
-      saveProfile(profile);
-      const plan = generateLocalPlan(profile);
-      savePlan(plan);
-      toast.success("Your plan is ready!");
-      navigate("/dashboard");
-    } catch (e) {
-      toast.error("Could not create plan. Please try again.");
-      setGenerating(false);
-    }
+ function finish() {
+  setGenerating(true);
+  try {
+    const profile: Profile = {
+      name: form.name || "Friend",
+      age: form.age ? Number(form.age) : undefined,
+      weight_kg: form.weight_kg ? Number(form.weight_kg) : undefined,
+      height_cm: form.height_cm ? Number(form.height_cm) : undefined,
+      fitness_level: form.fitness_level,
+      equipment: form.equipment,
+      goal: form.goal,
+      workout_time: form.workout_time,
+    };
+    saveProfile(profile);
+    const plan = generateLocalPlan(profile);
+    savePlan(plan);
+    // Sync to Supabase in background
+    import("@/lib/sync").then(({ syncProfileToSupabase, syncPlanToSupabase }) => {
+      syncProfileToSupabase();
+      syncPlanToSupabase();
+    });
+    toast.success("Your plan is ready!");
+    navigate("/dashboard");
+  } catch (e) {
+    toast.error("Could not create plan. Please try again.");
+    setGenerating(false);
   }
+}
 
   const steps = [
     {
