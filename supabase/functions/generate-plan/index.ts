@@ -34,7 +34,7 @@ serve(async (req) => {
       flexibility: "mobility, flexibility and stretching",
     };
 
-    const systemPrompt = `You are an expert personal trainer. Create a safe, progressive 14-day workout plan personalized to the user. Always include rest days. Tailor difficulty to fitness level and equipment. Return ONLY via the create_plan tool.`;
+    const systemPrompt = `You are an expert personal trainer. Create a safe, progressive 14-day plan personalized to the user. Each day has THREE short sessions: one MAIN workout focused on the user's goal, plus TWO LIGHT MOVEMENT BREAKS (gentle 3-7 minute mobility, walks, stretching, posture resets) so they keep moving throughout the day. Tailor difficulty to fitness level and equipment. Include rest days where the main session is also light. Return ONLY via the create_plan tool.`;
 
     const userPrompt = `Create a 14-day plan.
 Name: ${profile.name}
@@ -45,13 +45,22 @@ Fitness level: ${profile.fitness_level ?? "beginner"}
 Equipment: ${profile.equipment ?? "bodyweight only"}
 Goal: ${goalLabels[profile.goal] ?? profile.goal}
 
-Each day must have a title, focus (one of: strength, cardio, mobility, rest, hiit, full body), short motivation (1 sentence), and 4-6 exercises (rest days have 2-3 light mobility items or just one rest item). Each exercise: name, sets (number, use 1 for cardio/timed), reps (string e.g. "10-12" or "30 sec"), and a one-line cue.`;
+Each day must have:
+- title (story-like)
+- focus (one of: strength, cardio, mobility, rest, hiit, full body)
+- motivation (1 sentence)
+- sessions: array of EXACTLY 3 items in this order:
+  1) MAIN workout for the goal (4-6 exercises) — kind: "main"
+  2) Morning movement break (2-3 light items, ~5 min) — kind: "movement"
+  3) Afternoon/evening movement break (2-3 light items, ~5 min) — kind: "movement"
+
+Each session: kind ("main" | "movement"), title, suggested_time (e.g. "Anytime", "Morning", "Afternoon", "Evening"), and exercises (each with name, sets number, reps string like "10-12" or "30 sec", and a one-line cue). The main session's suggested_time should be "Anytime — pick when it fits".`;
 
     const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -74,22 +83,37 @@ Each day must have a title, focus (one of: strength, cardio, mobility, rest, hii
                       title: { type: "string" },
                       focus: { type: "string" },
                       motivation: { type: "string" },
-                      exercises: {
+                      sessions: {
                         type: "array",
+                        minItems: 3,
+                        maxItems: 3,
                         items: {
                           type: "object",
                           properties: {
-                            name: { type: "string" },
-                            sets: { type: "number" },
-                            reps: { type: "string" },
-                            cue: { type: "string" },
+                            kind: { type: "string", enum: ["main", "movement"] },
+                            title: { type: "string" },
+                            suggested_time: { type: "string" },
+                            exercises: {
+                              type: "array",
+                              items: {
+                                type: "object",
+                                properties: {
+                                  name: { type: "string" },
+                                  sets: { type: "number" },
+                                  reps: { type: "string" },
+                                  cue: { type: "string" },
+                                },
+                                required: ["name", "sets", "reps", "cue"],
+                                additionalProperties: false,
+                              },
+                            },
                           },
-                          required: ["name", "sets", "reps", "cue"],
+                          required: ["kind", "title", "suggested_time", "exercises"],
                           additionalProperties: false,
                         },
                       },
                     },
-                    required: ["title", "focus", "motivation", "exercises"],
+                    required: ["title", "focus", "motivation", "sessions"],
                     additionalProperties: false,
                   },
                 },
@@ -117,7 +141,6 @@ Each day must have a title, focus (one of: strength, cardio, mobility, rest, hii
     const planArgs = JSON.parse(toolCall.function.arguments);
     const days = planArgs.days;
 
-    // Delete previous plans + completions, insert new
     await supa.from("plans").delete().eq("user_id", userId);
     const { data: inserted, error: insErr } = await supa
       .from("plans")
