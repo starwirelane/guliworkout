@@ -3,7 +3,14 @@ import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 
 type Exercise = { name: string; sets: number; reps: string; cue: string };
-type Day = { title: string; focus: string; motivation: string; exercises: Exercise[] };
+type Session = { kind: "main" | "movement"; title: string; suggested_time: string; exercises: Exercise[] };
+type Day = { title: string; focus: string; motivation: string; sessions?: Session[]; exercises?: Exercise[] };
+
+const packIdx = (s: number, e: number) => s * 100 + e;
+function getSessions(d: Day): Session[] {
+  if (d.sessions?.length) return d.sessions;
+  return [{ kind: "main", title: "Main workout", suggested_time: "Anytime", exercises: d.exercises ?? [] }];
+}
 
 export default function PlanPage() {
   const navigate = useNavigate();
