@@ -40,7 +40,7 @@ export interface Plan {
   id: string;
 }
 
-// ─── localStorage helpers ───────────────────────────────────────────────────
+// ─── localStorage helpers ────────────────────────────────────────────────────
 
 export function saveProfile(profile: Profile) {
   localStorage.setItem("tw_profile", JSON.stringify(profile));
@@ -81,7 +81,32 @@ export function clearAll() {
   localStorage.removeItem("tw_completions");
 }
 
-// ─── Exercise library ────────────────────────────────────────────────────────
+// ─── Morning Wake-Up exercises ───────────────────────────────────────────────
+
+const MORNING_WAKEUP: Exercise[] = [
+  { name: "Deep Breathing", sets: 1, reps: "2 min", cue: "Inhale 4 counts, hold 4, exhale 4 — wake up your nervous system." },
+  { name: "Cat-Cow", sets: 1, reps: "10 reps", cue: "Inhale to arch, exhale to round — slow and gentle." },
+  { name: "Child's Pose", sets: 1, reps: "45 sec", cue: "Arms extended, breathe into your back, let everything soften." },
+  { name: "Downward Dog", sets: 1, reps: "30 sec", cue: "Press heels toward floor, pedal feet gently to warm up calves." },
+  { name: "Low Lunge Stretch", sets: 1, reps: "30 sec each side", cue: "Sink hips forward, keep torso tall — open the hip flexors." },
+  { name: "Seated Forward Fold", sets: 1, reps: "45 sec", cue: "Reach toward your toes, breathe into the hamstrings." },
+  { name: "Neck Rolls", sets: 1, reps: "30 sec each direction", cue: "Slow and controlled — never force it." },
+  { name: "Shoulder Rolls", sets: 1, reps: "30 sec each direction", cue: "Big slow rolls, release any overnight tension." },
+  { name: "Hip Circles", sets: 1, reps: "30 sec each direction", cue: "Hands on hips, big slow circles to wake up the hip joints." },
+  { name: "Standing Side Bend", sets: 1, reps: "30 sec each side", cue: "Reach overhead and over, feel the entire side body open." },
+  { name: "World's Greatest Stretch", sets: 1, reps: "4 each side", cue: "Lunge, rotate, reach — opens hips, thoracic spine, and hamstrings." },
+  { name: "Sun Salutation Flow", sets: 1, reps: "3 rounds", cue: "Breathe through each pose — inhale to extend, exhale to fold." },
+  { name: "Lying Spinal Twist", sets: 1, reps: "30 sec each side", cue: "Both shoulders on the floor, breathe and relax into the twist." },
+  { name: "Wrist and Ankle Circles", sets: 1, reps: "20 sec each", cue: "Wake up your joints — full slow circles in both directions." },
+  { name: "Standing Forward Fold", sets: 1, reps: "45 sec", cue: "Soft bend in knees, hang heavy, let gravity do the work." },
+];
+
+function pickMorningWakeup(): Exercise[] {
+  const shuffled = [...MORNING_WAKEUP].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, 5);
+}
+
+// ─── Warm-up and cooldown ────────────────────────────────────────────────────
 
 const WARMUP: Exercise[] = [
   { name: "Jumping Jacks", sets: 1, reps: "2 min", cue: "Get your heart rate up and warm your joints." },
@@ -103,7 +128,33 @@ const COOLDOWN: Exercise[] = [
   { name: "Deep Breathing", sets: 1, reps: "2 min", cue: "4 counts in, 4 counts out — bring your heart rate down." },
 ];
 
-// Bodyweight strength
+function pickWarmup(): Exercise[] {
+  return [...WARMUP].sort(() => Math.random() - 0.5).slice(0, 4);
+}
+
+function pickCooldown(): Exercise[] {
+  return [...COOLDOWN].sort(() => Math.random() - 0.5).slice(0, 3);
+}
+
+// ─── Core ────────────────────────────────────────────────────────────────────
+
+const CORE: Exercise[] = [
+  { name: "Plank", sets: 3, reps: "45 sec", cue: "Hips level, brace your belly button to your spine." },
+  { name: "Dead Bug", sets: 3, reps: "10 each side", cue: "Lower arm and opposite leg slowly, keep lower back pressed down." },
+  { name: "Bicycle Crunches", sets: 3, reps: "20 reps", cue: "Elbow to opposite knee, slow and controlled." },
+  { name: "Hollow Body Hold", sets: 3, reps: "30 sec", cue: "Lower back pressed flat, arms and legs long and low." },
+  { name: "Russian Twists", sets: 3, reps: "20 reps", cue: "Lean back 45 degrees, rotate side to side from the core." },
+  { name: "Leg Raises", sets: 3, reps: "12 reps", cue: "Lower back stays down, lower legs slowly." },
+  { name: "Side Plank", sets: 3, reps: "30 sec each side", cue: "Hips stacked, don't let them sag." },
+  { name: "Ab Wheel Rollout", sets: 3, reps: "8-10 reps", cue: "Roll out slow, pull back with lats and core." },
+];
+
+function pickCore(count = 2): Exercise[] {
+  return [...CORE].sort(() => Math.random() - 0.5).slice(0, count);
+}
+
+// ─── Main exercise library ────────────────────────────────────────────────────
+
 const BW_STRENGTH = {
   lose_weight: [
     { name: "Burpees", sets: 3, reps: "12 reps", cue: "Explosive jump up, controlled drop down." },
@@ -233,19 +284,6 @@ const GYM_STRENGTH = {
   ],
 };
 
-// Core exercises
-const CORE: Exercise[] = [
-  { name: "Plank", sets: 3, reps: "45 sec", cue: "Hips level, brace your belly button to your spine." },
-  { name: "Dead Bug", sets: 3, reps: "10 each side", cue: "Lower arm and opposite leg slowly, keep lower back pressed down." },
-  { name: "Bicycle Crunches", sets: 3, reps: "20 reps", cue: "Elbow to opposite knee, slow and controlled." },
-  { name: "Hollow Body Hold", sets: 3, reps: "30 sec", cue: "Lower back pressed flat, arms and legs long and low." },
-  { name: "Russian Twists", sets: 3, reps: "20 reps", cue: "Lean back 45 degrees, rotate side to side from the core." },
-  { name: "Leg Raises", sets: 3, reps: "12 reps", cue: "Lower back stays down, lower legs slowly." },
-  { name: "Side Plank", sets: 3, reps: "30 sec each side", cue: "Hips stacked, don't let them sag." },
-  { name: "Ab Wheel Rollout", sets: 3, reps: "8-10 reps", cue: "Roll out slow, pull back with lats and core." },
-];
-
-// Light workout exercises (easier, 30 min)
 const LIGHT_EXERCISES: Record<string, Exercise[]> = {
   lose_weight: [
     { name: "Brisk Walk", sets: 1, reps: "10 min", cue: "Arms swinging, pace just above comfortable." },
@@ -285,7 +323,6 @@ const LIGHT_EXERCISES: Record<string, Exercise[]> = {
   ],
 };
 
-// Day structure templates
 const DAY_STRUCTURES = [
   { focus: "full body", titles: ["The Opening Chapter", "Full Throttle", "Every Muscle, Every Rep", "Total Body Reset", "All In"] },
   { focus: "strength", titles: ["Built Different", "Iron Will", "Strength Day", "The Grind", "Heavy & Hard"] },
@@ -321,71 +358,47 @@ const MOTIVATIONS = [
   "Two weeks of discipline. A lifetime of results.",
 ];
 
-function pickWarmup(): Exercise[] {
-  const shuffled = [...WARMUP].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, 4);
-}
-
-function pickCooldown(): Exercise[] {
-  const shuffled = [...COOLDOWN].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, 3);
-}
-
-function pickCore(count = 2): Exercise[] {
-  const shuffled = [...CORE].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, count);
-}
-
 function getMainExercises(profile: Profile, dayIndex: number): Exercise[] {
-  const goal = profile.goal;
-  const equipment = profile.equipment;
-  const level = profile.fitness_level;
+  const { goal, equipment, fitness_level: level } = profile;
 
   let pool: Exercise[];
-  if (equipment === "full gym access") {
-    pool = GYM_STRENGTH[goal];
-  } else if (equipment === "dumbbells at home") {
-    pool = DB_STRENGTH[goal];
-  } else {
-    pool = BW_STRENGTH[goal];
-  }
+  if (equipment === "full gym access") pool = GYM_STRENGTH[goal];
+  else if (equipment === "dumbbells at home") pool = DB_STRENGTH[goal];
+  else pool = BW_STRENGTH[goal];
 
-  // Scale sets based on level
-  const scaleExercises = (exercises: Exercise[]): Exercise[] => {
-    return exercises.map(ex => ({
-      ...ex,
-      sets: level === "advanced" ? ex.sets + 1 : level === "beginner" ? Math.max(ex.sets - 1, 2) : ex.sets,
-      reps: level === "advanced"
-        ? ex.reps.replace(/\d+/g, n => String(Math.round(Number(n) * 1.15)))
-        : level === "beginner"
-        ? ex.reps.replace(/\d+-\d+/, (m) => { const [lo, hi] = m.split('-').map(Number); return `${lo}-${lo + Math.floor((hi - lo) / 2)}`; })
-        : ex.reps,
-    }));
-  };
+  const scale = (exercises: Exercise[]): Exercise[] => exercises.map(ex => ({
+    ...ex,
+    sets: level === "advanced" ? ex.sets + 1 : level === "beginner" ? Math.max(ex.sets - 1, 2) : ex.sets,
+  }));
 
-  // Rotate which exercises appear each day
   const offset = (dayIndex * 3) % pool.length;
   const rotated = [...pool.slice(offset), ...pool.slice(0, offset)];
-  const picked = rotated.slice(0, 6);
-
-  return scaleExercises(picked);
+  return scale(rotated.slice(0, 6));
 }
 
 function getLightExercises(profile: Profile): Exercise[] {
   const pool = LIGHT_EXERCISES[profile.goal];
-  const shuffled = [...pool].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, 5);
+  return [...pool].sort(() => Math.random() - 0.5).slice(0, 5);
 }
 
 export function generateLocalPlan(profile: Profile): Plan {
+  const workoutTimeLabel = (() => {
+    const [h, m] = profile.workout_time.split(":").map(Number);
+    const d = new Date();
+    d.setHours(h, m, 0, 0);
+    return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  })();
+
   const days: Day[] = DAY_STRUCTURES.map((structure, i) => {
-    const isRestDay = i === 6 || i === 13; // Day 7 and 14 are active recovery
+    const isRestDay = i === 6 || i === 13;
+
+    const morningExercises = pickMorningWakeup();
 
     const mainExercises: Exercise[] = isRestDay
       ? [
           { name: "Easy Walk", sets: 1, reps: "20 min", cue: "Comfortable pace — this is active recovery, not a workout." },
           { name: "Full Body Stretch", sets: 1, reps: "10 min", cue: "Hold each stretch 30-45 seconds, breathe deeply." },
-          { name: "Foam Rolling (or massage)", sets: 1, reps: "10 min", cue: "Spend extra time on sore spots." },
+          { name: "Foam Rolling", sets: 1, reps: "10 min", cue: "Spend extra time on sore spots." },
         ]
       : [
           ...pickWarmup(),
@@ -398,26 +411,24 @@ export function generateLocalPlan(profile: Profile): Plan {
       ? [
           { name: "Gentle Yoga Flow", sets: 1, reps: "15 min", cue: "Follow any beginner yoga video — just move gently." },
           { name: "Deep Breathing", sets: 1, reps: "5 min", cue: "Box breathing — 4 in, 4 hold, 4 out, 4 hold." },
-          { name: "Legs Up The Wall", sets: 1, reps: "5 min", cue: "Lie on your back, legs vertical against the wall — pure recovery." },
+          { name: "Legs Up The Wall", sets: 1, reps: "5 min", cue: "Lie on back, legs vertical against wall — pure recovery." },
         ]
       : getLightExercises(profile);
 
-    const titleOptions = structure.titles;
-    const title = titleOptions[i % titleOptions.length];
+    const title = structure.titles[i % structure.titles.length];
     const motivation = MOTIVATIONS[i % MOTIVATIONS.length];
-
-    const workoutTimeLabel = (() => {
-      const [h, m] = profile.workout_time.split(":").map(Number);
-      const d = new Date();
-      d.setHours(h, m, 0, 0);
-      return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-    })();
 
     return {
       title,
       focus: isRestDay ? "rest" : structure.focus,
       motivation,
       sessions: [
+        {
+          kind: "movement",
+          title: "Morning Wake-Up · 10-15 min",
+          suggested_time: "Morning",
+          exercises: morningExercises,
+        },
         {
           kind: "main",
           title: isRestDay ? "Active Recovery · 40 min" : "Main Workout · 60-90 min",
