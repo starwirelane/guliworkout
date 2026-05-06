@@ -2,6 +2,10 @@ import { useEffect, useState, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { loadProfile, loadPlan, loadCompletions, saveCompletions, type Day, type Session } from "@/lib/plan-generator";
 import { pickExerciseImage } from "@/lib/exercise-images";
+import { markUserActive, markUserInactive, fetchUnreadMessages, markMessageRead } from "@/lib/sync";
+import { supabase } from "@/integrations/supabase/client";
+import { getUserId } from "@/lib/sync";
+import { toast } from "sonner";
 
 function useNow() {
   const [now, setNow] = useState(new Date());
@@ -40,10 +44,17 @@ function scheduleNotification(workoutTime: string, name: string) {
   }, target.getTime() - Date.now());
 }
 
+interface AdminMessage {
+  id: string;
+  message: string;
+  created_at: string;
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const now = useNow();
   const notifScheduled = useRef(false);
+  const activeInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const profile = loadProfile();
   const plan = loadPlan();
@@ -52,12 +63,73 @@ export default function Dashboard() {
   const [activeSession, setActiveSession] = useState(0);
   const [activeExIdx, setActiveExIdx] = useState(0);
   const [notifGranted, setNotifGranted] = useState("Notification" in window && Notification.permission === "granted");
+  const [messages, setMessages] = useState<AdminMessage[]>([]);
+  const [showMessages, setShowMessages] = useState(false);
 
   useEffect(() => {
-    if (!profile || !plan) {
-      navigate("/onboarding");
+    if (!profile || !plan) { navigate("/onboarding"); return; }
+
+    // Mark active on load
+    markUserActive();
+
+    // Keep active every 25 seconds
+    activeInterval.current = setInterval(() => {
+      markUserActive();
+    }, 25000);
+
+    // Mark inactive on leave
+    const handleLeave = () => markUserInactive();
+    window.addEventListener("beforeunload", handleLeave);
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) markUserInactive();
+      else markUserActive();
+    });
+
+    return () => {
+      if (activeInterval.current) clearInterval(activeInterval.current);
+      window.removeEventListener("beforeunload", handleLeave);
+      markUserInactive();
+    };
+  }, []);
+
+  // Poll for messages every 20 seconds
+  useEffect(() => {
+    async function checkMessages() {
+      const msgs = await fetchUnreadMessages();
+      if (msgs.length > 0) {
+        setMessages(msgs);
+        setShowMessages(true);
+      }
     }
-  }, [profile, plan, navigate]);
+    checkMessages();
+    const interval = setInterval(checkMessages, 20000);
+
+    // Also use Supabase Realtime if available
+    if (supabase) {
+      const userId = getUserId();
+      const channel = supabase
+        .channel("admin-messages")
+        .on("postgres_changes", {
+          event: "INSERT",
+          schema: "public",
+          table: "admin_messages",
+          filter: `user_id=eq.${userId}`,
+        }, (payload) => {
+          const msg = payload.new as AdminMessage;
+          setMessages(prev => [...prev, msg]);
+          setShowMessages(true);
+          toast.info("📬 New message from admin");
+        })
+        .subscribe();
+
+      return () => {
+        clearInterval(interval);
+        supabase.removeChannel(channel);
+      };
+    }
+
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (notifGranted && profile && !notifScheduled.current) {
@@ -112,10 +184,11 @@ export default function Dashboard() {
     }
   }
 
-  function handleReset() {
-    if (confirm("Start a new plan? Your current progress will be lost.")) {
-      navigate("/onboarding");
-    }
+  async function dismissMessage(id: string) {
+    await markMessageRead(id);
+    const remaining = messages.filter(m => m.id !== id);
+    setMessages(remaining);
+    if (remaining.length === 0) setShowMessages(false);
   }
 
   return (
@@ -123,11 +196,46 @@ export default function Dashboard() {
       <div className="blob top-[-150px] right-[-100px] h-[500px] w-[500px] bg-primary/25" />
       <div className="blob bottom-[-100px] left-[-100px] h-[450px] w-[450px] bg-accent/35" />
 
+      {/* Admin messages panel */}
+      {showMessages && messages.length > 0 && (
+        <div className="fixed inset-x-0 top-4 z-50 flex justify-center px-4">
+          <div className="w-full max-w-md rounded-2xl border-2 border-primary bg-card shadow-2xl shadow-primary/20 p-5">
+            <div className="flex items-center justify-between mb-3">
+              <p className="font-bold text-sm uppercase tracking-widest text-primary">📬 Message from your coach</p>
+              <button onClick={() => { messages.forEach(m => dismissMessage(m.id)); }}
+                className="text-foreground/40 hover:text-foreground text-lg">✕</button>
+            </div>
+            {messages.map(m => (
+              <div key={m.id} className="mb-3 last:mb-0">
+                <p className="text-foreground text-base">{m.message}</p>
+                <div className="mt-2 flex items-center justify-between">
+                  <span className="text-xs text-foreground/40">{new Date(m.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
+                  <button onClick={() => dismissMessage(m.id)}
+                    className="rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground">
+                    Got it ✓
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <header className="relative z-20 mx-auto flex max-w-7xl items-center justify-between px-6 py-6">
         <Link to="/" className="serif text-2xl font-bold">Two<span className="italic-accent">week</span></Link>
         <div className="flex items-center gap-1 text-sm">
+          {messages.length > 0 && (
+            <button onClick={() => setShowMessages(true)}
+              className="relative rounded-full px-4 py-2 font-semibold hover:bg-foreground/5">
+              📬
+              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+                {messages.length}
+              </span>
+            </button>
+          )}
           <Link to="/plan" className="rounded-full px-4 py-2 font-semibold hover:bg-foreground/5">Full plan</Link>
-          <button onClick={handleReset} className="rounded-full px-4 py-2 font-semibold hover:bg-foreground/5">New plan</button>
+          <button onClick={() => { if (confirm("Start a new plan?")) navigate("/onboarding"); }}
+            className="rounded-full px-4 py-2 font-semibold hover:bg-foreground/5">New plan</button>
         </div>
       </header>
 
@@ -142,7 +250,6 @@ export default function Dashboard() {
           <p className="mt-3 text-lg text-foreground/65 italic">"{today.motivation}"</p>
         </div>
 
-        {/* Workout time banner */}
         <div className={`mb-8 flex items-center justify-between rounded-2xl border-2 px-6 py-4 transition-all ${isTime ? "border-primary bg-primary/10 shadow-lg shadow-primary/20" : "border-foreground/10 bg-card"}`}>
           <div className="flex items-center gap-3">
             <span className="text-2xl">{isTime ? "🔥" : "⏰"}</span>
@@ -160,7 +267,6 @@ export default function Dashboard() {
           {notifGranted && <span className="text-sm text-foreground/50 font-semibold">🔔 On</span>}
         </div>
 
-        {/* Session tabs */}
         <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
           {orderedSessions.map((s, si) => {
             const done = s.exercises.filter((_, ei) => completed[`${todayIndex}-${si}-${ei}`]).length;
@@ -168,7 +274,7 @@ export default function Dashboard() {
             return (
               <button key={si} onClick={() => { setActiveSession(si); setActiveExIdx(0); }}
                 className={`flex shrink-0 items-center gap-2 rounded-full border-2 px-5 py-2.5 text-sm font-semibold transition ${activeSession === si ? isMain ? "border-primary bg-primary text-primary-foreground" : "border-foreground bg-foreground text-background" : "border-foreground/15 bg-card hover:border-foreground/30"}`}>
-                {isMain ? "🔥 " : "🌿 "}{s.title}
+                {isMain ? "🔥 " : si === 0 ? "🌅 " : "🌿 "}{s.title}
                 <span className={`rounded-full px-1.5 py-0.5 text-xs ${activeSession === si ? "bg-white/20" : "bg-foreground/10"}`}>
                   {done}/{s.exercises.length}
                 </span>
@@ -178,7 +284,6 @@ export default function Dashboard() {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-          {/* LEFT: checklist */}
           <section className="rounded-3xl border-2 border-foreground/10 bg-card p-6 md:p-8">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="serif text-2xl font-bold">{currentSession.title}</h2>
@@ -218,12 +323,11 @@ export default function Dashboard() {
             </ul>
             {currentExercises.length > 0 && currentExercises.every((_, i) => completed[`${todayIndex}-${activeSession}-${i}`]) && (
               <div className="mt-6 rounded-2xl bg-primary/10 p-5 text-center">
-                <p className="serif text-xl font-bold">{currentSession.kind === "main" ? "Main workout done. ✦" : "Light workout done! 🌿"}</p>
+                <p className="serif text-xl font-bold">{currentSession.kind === "main" ? "Main workout done. ✦" : "Session done! 🌿"}</p>
               </div>
             )}
           </section>
 
-          {/* RIGHT: active exercise */}
           <section className="relative overflow-hidden rounded-3xl border-2 border-foreground/10 bg-gradient-to-br from-blush/40 via-card to-accent/30 p-6 md:p-10">
             <div className="absolute inset-0 paper opacity-40" />
             {activeEx ? (
@@ -263,7 +367,6 @@ export default function Dashboard() {
           </section>
         </div>
 
-        {/* Overall progress */}
         <div className="mt-6 rounded-2xl border-2 border-foreground/10 bg-card px-6 py-4">
           <div className="flex items-center justify-between text-sm font-semibold">
             <span className="text-foreground/60">Today's overall progress</span>
