@@ -9,6 +9,7 @@ import AuthPage from "./routes/auth";
 import Onboarding from "./routes/onboarding";
 import Dashboard from "./routes/dashboard";
 import PlanPage from "./routes/plan";
+import AdminPage from "./routes/admin";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
@@ -19,6 +20,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/plan" element={<PlanPage />} />
+        <Route path="/admin" element={<AdminPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <Toaster richColors position="top-center" />
